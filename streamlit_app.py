@@ -1,5 +1,6 @@
 import streamlit as st
 from openai import OpenAI
+from pypdf import PdfReader
 
 # Show title and description.
 st.title("MY Document question answering")
@@ -32,7 +33,7 @@ else:
 
         # Let the user upload a file via `st.file_uploader`.
         uploaded_file = st.file_uploader(
-            "Upload a document (.txt or .md)", type=("txt", "md")
+            "Upload a document (.txt or .md)", type=("txt", "pdf")
         )
 
         # Ask the user for a question via `st.text_area`.
@@ -44,8 +45,14 @@ else:
 
         if uploaded_file and question:
 
+            file_extension = uploaded_file.name.split('.')[-1]
+            if file_extension == 'txt':
+                document = uploaded_file.read().decode()
+            elif file_extension == 'pdf':
+                document = read_pdf(uploaded_file)
+            else:
+                st.error("Unsupported file type.") 
             # Process the uploaded file and question.
-            document = uploaded_file.read().decode()
             messages = [
                 {
                     "role": "user",
