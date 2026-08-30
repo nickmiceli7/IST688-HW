@@ -2,6 +2,13 @@ import streamlit as st
 from openai import OpenAI
 from pypdf import PdfReader
 
+def read_pdf(file):
+    reader = PdfReader(file)
+    string = ""
+    for page in reader.pages:
+        string += page.extract_text()
+    return string
+
 # Show title and description.
 st.title("MY Document question answering")
 st.write(
