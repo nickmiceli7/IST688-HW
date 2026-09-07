@@ -95,5 +95,5 @@ if key_valid:
             elif provider == 'Anthropic':
                 system = f"{choice}, in {language}"
                 messages = [{'role': 'user', 'content': f"Summarize this document: {document}"}]
-                with client.messages.stream(model=model, system=system, messages=messages) as stream:
+                with client.messages.stream(model=model, max_tokens=500, system=system, messages=messages) as stream:
                     st.write_stream(stream.text_stream)
