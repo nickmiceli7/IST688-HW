@@ -1,7 +1,6 @@
 from bs4 import BeautifulSoup
 import streamlit as st
 from openai import OpenAI
-import tiktoken
 import sys
 import chromadb
 from pathlib import Path
@@ -43,7 +42,7 @@ def load_html_to_collection(folder_path, collection):
         add_to_collection(collection, chunk1, f"{html_file.name}_1")
         add_to_collection(collection, chunk2, f"{html_file.name}_2")
 
-def chunk_text(text): #I chose this 'fixed size chunking' method because while there is the risk of losing out on proper context on the chunk-break, it is most efficient and for over 500 html files, I figured this would be the best method.
+def chunk_text(text): #I chose this 'fixed size chunking' method because while there is the risk of losing out on proper context on the chunk-break, it is most efficient and for over 500 html files, I figured this would be the best method.Given the nature of the documents, I feel that chunk1 will be much more valuable than chunk2. 
     mid = len(text) // 2
     chunk1 = text[:mid]
     chunk2 = text[mid:]
@@ -60,37 +59,35 @@ def get_chroma_collection():
 
 collection = get_chroma_collection()
 
-encoding = tiktoken.encoding_for_model("gpt-4o-mini")
-token_based_buffer = 500
-system_prompt = {'role': 'system', 'content': "Input a user's question and answer it. Then ask if they want to know more information. IF YES, give more information and AGAIN ask if they want more information. IF NO, ask what else you can help with. ALL OUTPUTS should be understandable by a 10 year old. You MUST end every single response with a new line reading exactly: 'Source(s): ' followed by a comma-separated list of the exact document filenames you used from the provided context. If you did not use any retrieved documents to answer, write 'Source(s): none'."}
+
+system_prompt = {'role': 'system', 'content': "Input a user's question and answer it. Then ask if they want to know more information. IF YES, give more information and AGAIN ask if they want more information. IF NO, ask what else you can help with. ALL OUTPUTS should be understandable by a 10 year old."}
 st.title("HW4: Chatbot using RAG")
-st.markdown(f"Token buffer: {token_based_buffer}")
 
-topic = st.sidebar.text_input('Topic', placeholder='Type your topic (e.g., GenAI)...')
+#topic = st.sidebar.text_input('Topic', placeholder='Type your topic (e.g., GenAI)...')
 
-if topic:
-    client = st.session_state.open_ai_client
-    response = client.embeddings.create(
-        input=topic,
-        model='text-embedding-3-small'
-    )
+#if topic:
+ #   client = st.session_state.open_ai_client
+  #  response = client.embeddings.create(
+   #     input=topic,
+    #    model='text-embedding-3-small'
+    #)
 
-    query_embedding = response.data[0].embedding
+    #query_embedding = response.data[0].embedding
 
-    results = collection.query(
-        query_embeddings = [query_embedding],
-        n_results = 10
-    )
+    #results = collection.query(
+     #   query_embeddings = [query_embedding],
+      #  n_results = 10
+    #)
 
-    st.subheader(f'Results for: {topic}')
+    #st.subheader(f'Results for: {topic}')
 
-    for i in range(len(results['documents'][0])):
-        doc = results['documents'][0][i]
-        doc_id = results['ids'][0][i]
+    #for i in range(len(results['documents'][0])):
+     #   doc = results['documents'][0][i]
+      #  doc_id = results['ids'][0][i]
 
-        st.write(f'**{i+1}. {doc_id}**')
-else:
-    st.info('Enter a topic in the sidebar to seach the collection')
+       # st.write(f'**{i+1}. {doc_id}**')
+#else:
+    #st.info('Enter a topic in the sidebar to seach the collection')
 
 if 'messages' not in st.session_state:
     st.session_state.messages = [{'role': 'assistant', 'content': 'How can I help you?'}]
@@ -125,25 +122,10 @@ if prompt := st.chat_input("What is up?"):
         doc_id = results['ids'][0][i]
         relevant_doc += f"{doc_id}: {doc} \n"
 
-    dynamic_system_prompt = {'role': 'system', 'content': system_prompt['content'] + "\n The following text is your RAG context, make sure to cite it clearly if you use it: At the end of every response, add a line formatted exactly as: Source(s): <filename1>, <filename2> listing only the documents you actually used. \n" + relevant_doc}
+    dynamic_system_prompt = {'role': 'system', 'content': system_prompt['content'] + "\n The following text is your RAG context. You MUST end every single response with a new line reading exactly: 'Source(s): ' followed by a comma-separated list of the exact document filenames you used from the provided context. If you did not use any retrieved documents to answer, write 'Source(s): none'. \n" + relevant_doc}
 
 
-    #buffer_messages = st.session_state.messages[-4:]
-    #^ used for message count conversation buffer
-
-    buffer_messages = []
-    total_tokens = 0
-
-    for msg in reversed(st.session_state.messages):
-        token_count = len(encoding.encode(msg['content']))
-        if total_tokens + token_count < token_based_buffer:
-            buffer_messages.append(msg)
-            total_tokens = total_tokens + token_count
-        else:
-            break
-
-
-    buffer_messages.reverse()
+    buffer_messages = st.session_state.messages[-10:]
     passed_messages = []
     passed_messages.append(dynamic_system_prompt)
     passed_messages.extend(buffer_messages)
