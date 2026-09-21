@@ -79,7 +79,7 @@ if topic:
 
     results = collection.query(
         query_embeddings = [query_embedding],
-        n_results = 3
+        n_results = 10
     )
 
     st.subheader(f'Results for: {topic}')
