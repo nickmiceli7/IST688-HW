@@ -1,3 +1,4 @@
+import json
 from bs4 import BeautifulSoup
 import streamlit as st
 from openai import OpenAI
@@ -59,35 +60,29 @@ def get_chroma_collection():
 
 collection = get_chroma_collection()
 
+tools = [
+    {
+        "type": "function",
+        "function": {
+            "name": "relevant_club_info",
+            "description": "Retrieves relevant information about student organizations from a vector database, given a user's query.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "This tool takes a query as input and embeds it to pull relevant entries from a vector database of classes"
+                    }
+                },
+                "required": ["query"]
+            }
+        }
+    }
+]
+
 
 system_prompt = {'role': 'system', 'content': "Input a user's question and answer it. Then ask if they want to know more information. IF YES, give more information and AGAIN ask if they want more information. IF NO, ask what else you can help with. ALL OUTPUTS should be understandable by a 10 year old."}
-st.title("HW4: Chatbot using RAG")
-
-#topic = st.sidebar.text_input('Topic', placeholder='Type your topic (e.g., GenAI)...')
-
-#if topic:
- #   client = st.session_state.open_ai_client
-  #  response = client.embeddings.create(
-   #     input=topic,
-    #    model='text-embedding-3-small'
-    #)
-
-    #query_embedding = response.data[0].embedding
-
-    #results = collection.query(
-     #   query_embeddings = [query_embedding],
-      #  n_results = 10
-    #)
-
-    #st.subheader(f'Results for: {topic}')
-
-    #for i in range(len(results['documents'][0])):
-     #   doc = results['documents'][0][i]
-      #  doc_id = results['ids'][0][i]
-
-       # st.write(f'**{i+1}. {doc_id}**')
-#else:
-    #st.info('Enter a topic in the sidebar to seach the collection')
+st.title("HW5: Chatbot using RAG")
 
 if 'messages' not in st.session_state:
     st.session_state.messages = [{'role': 'assistant', 'content': 'How can I help you?'}]
@@ -102,40 +97,58 @@ if prompt := st.chat_input("What is up?"):
 
     st.session_state.messages.append({"role": "user", "content": prompt})
 
-    client = st.session_state.open_ai_client
-    response = client.embeddings.create(
-       input=prompt,
-       model='text-embedding-3-small'
-    )
-
-    query_embedding = response.data[0].embedding
-
-    results = collection.query(
-        query_embeddings = [query_embedding],
-        n_results = 3
-    )
-
-
-    relevant_doc = ''
-    for i in range(len(results['documents'][0])):
-        doc = results['documents'][0][i]
-        doc_id = results['ids'][0][i]
-        relevant_doc += f"{doc_id}: {doc} \n"
-
-    dynamic_system_prompt = {'role': 'system', 'content': system_prompt['content'] + "\n The following text is your RAG context. You MUST end every single response with a new line reading exactly: 'Source(s): ' followed by a comma-separated list of the exact document filenames you used from the provided context. If you did not use any retrieved documents to answer, write 'Source(s): none'. \n" + relevant_doc}
-
-
     buffer_messages = st.session_state.messages[-10:]
     passed_messages = []
-    passed_messages.append(dynamic_system_prompt)
+    passed_messages.append(system_prompt)
     passed_messages.extend(buffer_messages)
 
-    stream = client.chat.completions.create(
+    client = st.session_state.open_ai_client
+    response = client.chat.completions.create(
         model='gpt-4o-mini',
-        messages=passed_messages,
-        stream=True)
+        messages= passed_messages,
+        tools=tools,
+        tool_choice='auto',
+        stream=False
+    )
 
-    with st.chat_message('assistant'):
-        response = st.write_stream(stream)
+    message = response.choices[0].message
 
-    st.session_state.messages.append({"role": "assistant", "content": response})
+    if message.tool_calls:
+        tool_call = message.tool_calls[0]
+        tool_call_id = tool_call.id
+        function_name = tool_call.function.name
+        function_args = json.loads(tool_call.function.arguments)
+        query = function_args.get('query')
+        query_embedding = client.embeddings.create(input=query, model='text-embedding-3-small')
+        query_embedding_data = query_embedding.data[0].embedding
+
+        results = collection.query(
+            query_embeddings = [query_embedding_data],
+            n_results = 3
+        )
+
+        relevant_doc = ''
+        for i in range(len(results['documents'][0])):
+            doc = results['documents'][0][i]
+            doc_id = results['ids'][0][i]
+            relevant_doc += f"{doc_id}: {doc} \n"
+
+        passed_messages.append(message.to_dict())
+        passed_messages.append({'role': 'tool', 'content': relevant_doc, 'tool_call_id': tool_call_id})
+
+        stream = client.chat.completions.create(
+            model='gpt-4o-mini',
+            messages=passed_messages,
+            stream=True
+        )
+
+
+        with st.chat_message('assistant'):
+            output = st.write_stream(stream)
+
+        st.session_state.messages.append({"role": "assistant", "content": output})
+
+    else: 
+        with st.chat_message('assistant'):
+            st.write(message.content)
+        st.session_state.messages.append({"role": "assistant", "content": message.content})
