@@ -133,7 +133,22 @@ if prompt := st.chat_input("What is up?"):
             doc_id = results['ids'][0][i]
             relevant_doc += f"{doc_id}: {doc} \n"
 
-        passed_messages.append(message.to_dict())
+        assistant_tool_message = {
+            'role': 'assistant',
+            'content': None,
+            'tool_calls': [
+                {
+                    'id': tool_call.id,
+                    'type': 'function',
+                    'function': {
+                        'name': tool_call.function.name,
+                        'arguments': tool_call.function.arguments
+                    }
+                }
+            ]
+        }
+
+        passed_messages.append(assistant_tool_message)
         passed_messages.append({'role': 'tool', 'content': relevant_doc, 'tool_call_id': tool_call_id})
 
         stream = client.chat.completions.create(
