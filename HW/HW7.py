@@ -9,6 +9,8 @@ st.title("HW7: News Information Bot")
 
 EMBED_MODEL = "text-embedding-3-small"
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+MODELS = {"basic": "gpt-5-mini", "advanced": "gpt-5"} 
+N_RESULTS = 3
 
 def embed(texts):
     resp = client.embeddings.create(model=EMBED_MODEL, input=texts)
